@@ -1,111 +1,250 @@
 #include "cpu.hpp"
 
-typedef struct cpu {
+typedef enum mode {
+	UNUSED,
+	implicit,
+	accumulator,
+	immediate,
+	zeroPage,
+	zeroPageX,
+	zeroPageY,
+	relative,
+	absolute,
+	absoluteX,
+	absoluteY,
+	indirect,
+	indexedIndirect,
+	indirectIndexed,
+} MODE;
+
+typedef enum Regs {
+	reg_sign,
+	reg_overflow,
+	reg_ignored,
+	reg_break,
+	reg_decimal,
+	reg_interrupt,
+	reg_zero,
+	reg_carry,
+} REG;
+
+typedef struct op_code_info {
+	int8_t operand;
+	uint16_t address;
+	MODE mode;
+} OP_CODE_INFO;
+
+#define FLAG_CARRY 0x01
+#define FLAG_ZERO 0x02
+#define FLAG_INTERRUPT 0x04
+#define FLAG_DECIMAL 0x08
+#define FLAG_BREAK 0x10
+#define FLAG_CONSTANT 0x20
+#define FLAG_OVERFLOW 0x40
+#define FLAG_SIGN 0x80
+#define BASE_STACK_START 0x100
+
+class cpu
+{
+private:
 	// various registers
-	uint16_t PC;
-	uint8_t SP, A, X, Y, Status;
-	uint8_t reg[8];
+	int16_t PC;
+	int8_t SP, A, X, Y, Status;
+	int8_t reg[8];
+	memory *mem;
 
 	// helper variables
-	uint32_t insturctions;
-	uint32_t clockTicks6502, clockGoal6502;
-} CPU;
-
-int8_t getCarryFlag(CPU *c) {
-	return c->reg[reg_carry];
-}
-
-int8_t getZeroFlag(CPU *c) {
-	return c->reg[reg_zero];
-}
-
-int8_t getInterruptFalg(CPU *c) {
-	return c->reg[reg_interrupt];
-}
-
-int8_t getDecimalFlag(CPU *c) {
-	return c->reg[reg_decimal];
-}
-
-int8_t getBreakFlag(CPU *c) {
-	return c->reg[reg_break];
-}
-
-int8_t getFifthFlag(CPU *c) {
-	return c->reg[reg_fifth];
-}
-
-int8_t getOverflowFlag(CPU *c) {
-	return c->reg[reg_overflow];
-}
-
-int8_t getSignFlag(CPU *c) {
-	return c->reg[reg_negative];
-}
-
-void setZeroFlag(CPU *c, int8_t val) {
-	if (val == 0) {
-		c->reg[reg_zero] = 1;
-	} else {
-		c->reg[reg_zero] = 0;
+	int32_t insturctions;
+	int32_t clockTicks6502, clockGoal6502;
+public:
+	int8_t getStatusRegister(CPU *c) {
+		//qwe
 	}
-}
-
-void setCarryFlag(CPU *c, int16_t val) {
-	(val > 0xFF) ? c->reg[reg_carry] = 1, c->reg[reg_carry] = 0;
-}
-
-void setNegativeFlag(CPU *c, int8_t val) {
-	if (val & 0x80) {
-		c->reg[reg_negative] = 1;
-	} else {
-		c->reg[reg_negative] = 0;
+	cpu() {
+		this->mem = new memory();
+		this->PC = this->SP = this->A = this->X = this->Y = this->Status = 0;
+		// default value always
+		this->reg[reg_constant] = 1;
 	}
-}
 
-void setOverflowFlag(CPU *c, int8_t accumulator, int16_t sum, int8_t operand) {
-	if (!((accumulator ^ operand) & 0x80) && ((accumulator ^ sum) & 0x80)) {
-		c->reg[reg_overflow] = 1;
-	} else {
-		c->reg[reg_overflow] = 0;
+	int8_t getStatusRegister() {
+		int8_t statusRegister = 0;
+		statusRegister |= (this->reg[reg_carry] >> FLAG_CARRY);
+		statusRegister |= (this->reg[reg_zero] >> FLAG_ZERO);
+		statusRegister |= (this->reg[reg_interrupt] >> FLAG_INTERRUPT);
+		statusRegister |= (this->reg[reg_decimal] >> FLAG_DECIMAL);
+		statusRegister |= (this->reg[reg_break] >> FLAG_DECIMAL);
+		statusRegister |= (this->reg[reg_constant] >> FLAG_CONSTANT);
+		statusRegister |= (this->reg[reg_overflow] >> FLAG_OVERFLOW);
+		statusRegister |= (this->reg[reg_sign] >> FLAG_SIGN);
+		this->Status = statusRegister;
+		return statusRegister;	
 	}
-}
 
-// for reference http://www.obelisk.me.uk/6502/reference.html
-void adc(CPU *c, OP_CODE_INFO *o) {
-	int8_t carry = getCarryFlag(c);
-	int8_t accumulator = c->A;
-	int8_t operand = o->operand;
-	int16_t sum = (0x00FF & carry) + (0x00FF & accumulator) + (0x00FF & operand);
-	int8_t sumInByte = (0xFF & sum);
-	setZeroFlag(c, sumInByte);
-	setCarryFlag(c, sum);
-	setOverflowFlag(c, accumulator, sumInByte, o->operand);
-	setNegativeFlag(c, sumInByte);
-	c->A = sumInByte;
-}
+	int8_t getCarryFlag() { return this->reg[reg_carry]; }
+	int8_t getZeroFlag() { return this->reg[reg_zero]; }
+	int8_t getInterruptFlag() { return this->reg[reg_interrupt]; }
+	int8_t getDecimalFlag() { return this->reg[reg_decimal]; }
+	int8_t getBreakFlag() { return this->reg[reg_break]; }
+	int8_t getConstantFlag() { return this->reg[reg_fifth]; }
+	int8_t getOverflowFlag() { return this->reg[reg_overflow]; }
+	int8_t getSignFlag() { return this->reg[reg_sign]; }
+	int8_t getAccumulator() {return this->A; }
 
-void and(CPU *c, OP_CODE_INFO *o) {
-	int8_t accumulator = c->A;
-	int8_t operand = o->operand;
-	int8_t res = accumulator & operand;
-	setNegativeFlag(c, res);
-	setZeroFlag(c, res);
-	c->A = res;
-}
 
-void asl(CPU *c, OP_CODE_INFO *o) {
-	int16_t res = (0x00FF & o->operand) << 1;
-	int8_t resInByte = res & 0xFF;
-	setCarryFlag(c, res);
-	setZeroFlag(c, resInByte);
-	setNegativeFlag(c, resInByte);
-	if (o->mode == accumulator) {
-		c->A = resInByte;
-	} else {
-		c->writeToMemory(resInByte, o->address);
+	void setZeroFlag(int8_t val) {
+		if (val == 0) this->reg[reg_zero] = 1;
+		else this->reg[reg_zero] = 0;
 	}
-}
+
+	void setCarryFlag(int16_t val) {
+		(val > 0xFF) ? this->reg[reg_carry] = 1, this->reg[reg_carry] = 0;
+	}
+
+	void setSignFlag(int8_t val) {
+		if (val & 0x80) this->reg[reg_sign] = 1;
+		else this->reg[reg_sign] = 0;
+	}
+
+	void setOverflowFlagADC(int8_t accumulator, int16_t sum, int8_t operand) {
+		if (!((accumulator ^ operand) & 0x80) && ((accumulator ^ sum) & 0x80)) {
+			this->reg[reg_overflow] = 1;
+		} else {
+			this->reg[reg_overflow] = 0;
+		}
+	}
+
+	void setOverflowFlag(int8_t val) {
+		(val > 0) ? this->reg[reg_overflow] = 1, this->reg[reg_overflow] = 0;
+	}
+
+	void setBreakFlag(int8_t val) {
+		(val > 0) ? this->reg[reg_break] = 1, this->reg[reg_break] = 0;
+	}
+
+	void setInterruptFlag(int8_t val) {
+		(val > 0) ? this->reg[reg_interrupt] = 1, this->reg[reg_interrupt] = 0;
+	}
+
+	void setDecimalFlag(int8_t val) {
+		(val > 0) ? this->reg[reg_decimal] = 1, this->reg[reg_decimal] = 0;
+	}
+
+	void setAccumulator(int8_t val) {
+		this->A = val;
+	}
+
+
+	// reference : http://www.obelisk.me.uk/6502/reference.html
+	// reference : http://nesdev.com/6502.txt
+	void adc(OP_CODE_INFO *o) {
+		int8_t carry = this->getCarryFlag();
+		int8_t accumulator = this->getAccumulator();
+		int8_t operand = o->operand;
+		int16_t sum = (0x00FF & carry) + (0x00FF & accumulator) + (0x00FF & operand);
+		int8_t sumInByte = (0xFF & sum);
+		this->setZeroFlag(sumInByte);
+		this->setCarryFlag(sum);
+		this->setOverflowFlagADC(accumulator, sumInByte, o->operand);
+		this->setNegativeFlag(sumInByte);
+		this->setAccumulator(sumInByte);
+	}
+
+	void and(OP_CODE_INFO *o) {
+		int8_t accumulator = this->getAccumulator();
+		int8_t operand = o->operand;
+		int8_t res = accumulator & operand;
+		this->setNegativeFlag(res);
+		this->setZeroFlag(res);
+		this->setAccumulator(res);
+	}
+
+	void asl(OP_CODE_INFO *o) {
+		int16_t res = (0x00FF & o->operand) << 1;
+		int8_t resInByte = res & 0xFF;
+		this->setCarryFlag(res);
+		this->setZeroFlag(resInByte);
+		this->setNegativeFlag(resInByte);
+		if (o->mode == accumulator) {
+			this->setAccumulator(resInByte);
+		} else {
+			// TODO : implement the function
+			this->writeToMemory(resInByte, o->address);
+		}
+	}
+
+	// TODO : missing clock
+	void bcc(OP_CODE_INFO *o) {
+		if (!this->getCarryFlag()) {
+			this->PC = o->address;
+		}
+	}
+
+	void bcs(OP_CODE_INFO *o) {
+		if (this->getCarryFlag()) {
+			this->PC = o->address;
+		}
+	}
+
+	void beq(OP_CODE_INFO *o) {
+		if (this->getZeroFlag()) {
+			this->PC = o->address;
+		}
+	}
+
+	void bit(OP_CODE_INFO *o) {
+		this->setSignFlag(o->operand);
+		this->setOverflowFlag((o->operand & 0x40) ? 1 : 0);
+		this->setZeroFlag(o->operand & this->getAccumulator());
+	}
+
+	void bmi(OP_CODE_INFO *o) {
+		if (this->getSignFlag()) {
+			this->PC = o->address;
+		}
+	}
+
+	void bne(OP_CODE_INFO *o) {
+		if (!this->getZeroFlag()) {
+			this->PC = o->address;
+		}
+	}
+
+	void bpl(OP_CODE_INFO *o) {
+		if (!this->getSignFlag()) {
+			this->PC = o->address;
+		}
+	}
+
+	void brk(OP_CODE_INFO *o) {
+		this->PC++;
+		int8_t returnAddressHighBits = ((this->PC >> 8) & 0xFF);
+		this->pushToStack(returnAddressHighBits);
+		int8_t returnAddressLowerBits = (this->PC & 0xFF);
+		this->pushToStack(returnAddressLowerBits);
+		this->setBreakFlag(1);
+		this->pushToStack(this->getStatusRegister());
+		this->setInterruptFlag(1);
+		this->PC = (this->loadFromMemory(0xFFFE) | (this->LoadFromMemory(0xFFFF) << 8));
+	}
+
+	void bvc(OP_CODE_INFO *o) {
+		if (!this->getOverflowFlag()) {
+			this->PC = o->address;
+		}
+	}
+
+	void bvs(OP_CODE_INFO *o) {
+		if (!this->getOverflowFlag()) {
+			this->PC = o->address;
+		}
+	}
+
+	void clc(OP_CODE_INFO *o) {this->setCarryFlag(0);}
+	void cld(OP_CODE_INFO *o) {this->setDecimalFlag(0);}
+	void cli(OP_CODE_INFO *o) {this->setInterruptFlag(0);}
+	void clv(OP_CODE_INFO *o) {this->setOverflowFlag(0);}
+};
 
 void (*opcodeToFunction[256])(CPU *c, OP_CODE_INFO *o) = {
     brk, ora, fut, fut, fut, ora, asl, fut,
