@@ -89,7 +89,9 @@ public:
 	int8_t getConstantFlag() { return this->reg[reg_fifth]; }
 	int8_t getOverflowFlag() { return this->reg[reg_overflow]; }
 	int8_t getSignFlag() { return this->reg[reg_sign]; }
-	int8_t getAccumulator() {return this->A; }
+	int8_t getAccumulator() { return this->A; }
+	int8_t getX() { return this->X; }
+	int8_t getY() { return this->Y; }
 
 
 	void setZeroFlag(int8_t val) {
@@ -114,6 +116,14 @@ public:
 		}
 	}
 
+	void setOverflowFlagSBC(int8_t accumulator, int16_t sub, int8_t operand) {
+		if (!((accumulator ^ operand) & 0x80) && ((accumulator ^ sub) & 0x80)) {
+			this->reg[reg_overflow] = 1;
+		} else {
+			this->reg[reg_overflow] = 0;
+		}
+	}
+
 	void setOverflowFlag(int8_t val) {
 		(val > 0) ? this->reg[reg_overflow] = 1, this->reg[reg_overflow] = 0;
 	}
@@ -132,6 +142,14 @@ public:
 
 	void setAccumulator(int8_t val) {
 		this->A = val;
+	}
+
+	void setX(int8_t val) {
+		this->X = val;
+	}
+
+	void setY(int8_t val) {
+		this->Y = val;
 	}
 
 
@@ -244,6 +262,267 @@ public:
 	void cld(OP_CODE_INFO *o) {this->setDecimalFlag(0);}
 	void cli(OP_CODE_INFO *o) {this->setInterruptFlag(0);}
 	void clv(OP_CODE_INFO *o) {this->setOverflowFlag(0);}
+
+	void cmp(OP_CODE_INFO *o) {
+		int8_t src = this->getAccumulator() - o->operand;
+		int16_t longSrc = (int16_t)this->getAccumulator() - (int16_t)o->operand;
+		this->setCarryFlag(longSrc < 0x100);
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+	}
+
+	void cpx(OP_CODE_INFO *o) {
+		int8_t src = this->getX() - o->operand;
+		int16_t longSrc = (0x00FF & this->getX()) - (0x00FF & o->operand);
+		this->setCarryFlag(longSrc < 0x100);
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+	}
+
+	void cpy(OP_CODE_INFO *o) {
+		int8_t src = this->getY() - o->operand;
+		int16_t longSrc = (0x00FF & this->getY()) - (0x00FF & o->operand);
+		this->setCarryFlag(longSrc < 0x100);
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+	}
+
+	void dec(OP_CODE_INFO *o) {
+		uint8_t src = o->operand - 1;
+		src = src & 0xFF;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->writeToMemory(o->address, src);
+	}
+
+	void dex(OP_CODE_INFO *o) {
+		uint8_t src = this->getX();
+		src = (src - 1) & 0xFF;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setX(src);
+	}
+
+	void dey(OP_CODE_INFO *o) {
+		uint8_t src = this->getY();
+		src = (src - 1) & 0xFF;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setY(src);
+	}
+
+	void eor(OP_CODE_INFO *o) {
+		int8_t src = o->operand ^ this->getAccumulator();
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setAccumulator(src);
+	}
+
+	// check if uint8_t is the correct datatype to use.
+	// it probably is because of the overflow which might occur
+	void inc(OP_CODE_INFO *o) {
+		uint8_t src = o->operand;
+		src = src + 1;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->writeToMemory(o->address, src);
+	}
+
+	void inx(OP_CODE_INFO *o) {
+		uint8_t src = this->getX();
+		src = src + 1;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setX(src);
+	}
+
+	void iny(OP_CODE_INFO *o) {
+		uint8_t src = this->getY();
+		src = src + 1;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setY(src);
+	}
+
+	void jmp(OP_CODE_INFO *o) {
+		this->PC = o->address;
+	}
+
+	void jsr(OP_CODE_INFO *o) {
+		this->PC--;
+		int8_t returnAddressHighBits = ((this->PC >> 8) & 0xFF);
+		int8_t returnAddressLowerBits = (this->PC & 0xFF);
+		this->pushToStack(returnAddressHighBits);
+		this->pushToStack(returnAddressLowerBits);
+		this->PC = o->address;
+	}
+
+	void lda(OP_CODE_INFO *o) {
+		this->setSignFlag(o->operand);
+		this->setZeroFlag(o->operand);
+		this->setAccumulator(o->operand);
+	}
+
+	void ldx(OP_CODE_INFO *o) {
+		this->setSignFlag(o->operand);
+		this->setZeroFlag(o->operand);
+		this->setX(o->operand);
+	}
+
+	void ldy(OP_CODE_INFO *o) {
+		this->setSignFlag(o->operand);
+		this->setZeroFlag(o->operand):
+		this->setY(o->operand);
+	}
+
+	void lsr(OP_CODE_INFO *o) {
+		this->setCarryFlag((o->operand & 0x01) > 0 ? 1 : 0);
+		int8_t src = o->operand;
+		src >>= 1;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		if (o->mode == accumulator) {
+			this->setAccumulator(src);
+		} else {
+			this->writeToMemory(o->address, src);
+		}
+	}
+
+	void nop(OP_CODE_INFO *o) {
+		// do nothing
+	}
+
+	void ora(OP_CODE_INFO *o) {
+		int8_t src = o->operand;
+		src |= this->getAccumulator();
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setAccumulator(src);
+	}
+
+	void pha(OP_CODE_INFO *o) {
+		this->pushToStack(this->getAccumulator());
+	}
+
+	void php(OP_CODE_INFO *o) {
+		this->pushToStack(this->getStatusRegister());
+	}
+
+	// TODO : implement pullFromStack function
+	void pla(OP_CODE_INFO *o) {
+		int8_t src = this->pullFromStack();
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+	}
+
+	// TODO : implement setStatusRegister function
+	void plp(OP_CODE_INFO *o) {
+		int8_t src = this->pullFromStack();
+		this->setStatusRegister(src);
+	}
+
+	void rol(OP_CODE_INFO *o) {
+		int16_t longSrc = o->operand;
+		longSrc <<= 1;
+		if (this->getCarryFlag()) {
+			longSrc |= 0x1;
+		}
+		int8_t src = longSrc & 0xFF;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		if (o->mode == accumulator) {
+			this->setAccumulator(src);
+		} else {
+			this->writeToMemory(o->address, src);
+		}
+	}
+
+	void ror(OP_CODE_INFO *o) {
+		int16_t longSrc = o->operand;
+		if (this->getCarryFlag()) longSrc |= 0x100;
+		this->setCarryFlag((src & 0x01) > 0 ? 1 : 0);
+		longSrc >>= 1;
+		int8_t src = longSrc & 0xFF;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		if (o->mode == accumulator) {
+			this->setAccumulator(src);
+		} else {
+			this->writeToMemory(o->address, src);
+		}
+	}
+
+	void rti(OP_CODE_INFO *o) {
+		int8_t src = this->pullFromStack();
+		this->setStatusRegister(src);
+		uint8_t lowerBits = this->pullFromStack();
+		uint8_t upperBits = this->pullFromStack();
+		uint16_t address = ((upperBits << 8) | lowerBits);
+		this->PC = address;
+	}
+
+	void rts(OP_CODE_INFO *o) {
+		uint16_t src = 0x00FF & this->pullFromStack();
+		src += (this->pullFromStack() << 8) + 1;
+		this->PC = src;
+	}
+
+	void sbc(OP_CODE_INFO *o) {
+		uint16_t longRes = (0x00FF & this->getAccumulator()) - (0x00FF & o->operand) - (this->getCarryFlag() ? 1 : 0);
+		uint8_t res = longRes & 0xFF;
+		this->setSignFlag(res);
+		this->setZeroFlag(res);
+		this->setOverflowFlagSBC(this->getAccumulator(), longRes, o->operand);
+		this->setCarryFlag((longRes < 0x100) ? 1 : 0);
+		this->setAccumulator(res);
+	}
+
+	void sec(OP_CODE_INFO *o) {this->setCarryFlag(1);}
+	void sed(OP_CODE_INFO *o) {this->setDecimalFlag(1);}
+	void sei(OP_CODE_INFO *o) {this->setInterruptFlag(1);}
+	void sta(OP_CODE_INFO *o) {this->writeToMemory(o->address, this->getAccumulator());}
+	void stx(OP_CODE_INFO *o) {this->writeToMemory(o->address, this->getX());}
+	void sty(OP_CODE_INFO *o) {this->writeToMemory(o->address, this->getY());}
+
+	void tax(OP_CODE_INFO *o) {
+		uint8_t src = this->getAccumulator();
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setX(src);
+	}
+
+	void tay(OP_CODE_INFO *o) {
+		uint8_t src = this->getAccumulator();
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setY(src);
+	}
+
+	void tsx(OP_CODE_INFO *o) {
+		uint8_t src = this->SP;
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setX(src);
+	}
+
+	void txa(OP_CODE_INFO *o) {
+		uint8_t src = this->getX();
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setAccumulator(src);
+	}
+
+	void txs(OP_CODE_INFO *o) {
+		uint8_t src = this->getX();
+		this->SP = src;
+	}
+
+	void tya(OP_CODE_INFO *o) {
+		uint8_t src = this->getY();
+		this->setSignFlag(src);
+		this->setZeroFlag(src);
+		this->setAccumulator(src);
+	}
 };
 
 void (*opcodeToFunction[256])(CPU *c, OP_CODE_INFO *o) = {
