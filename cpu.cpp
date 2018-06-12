@@ -1,4 +1,5 @@
-#include "cpu.hpp"
+// #include "memory.cpp"
+#include "string.h"
 
 typedef enum mode {
 	UNUSED,
@@ -44,18 +45,115 @@ typedef struct op_code_info {
 #define FLAG_SIGN 0x80
 #define BASE_STACK_START 0x100
 
+string opcodeToFunction[256] = {
+    "brk", "ora", "fut", "fut", "fut", "ora", "asl", "fut",
+    "php", "ora", "asl", "fut", "fut", "ora", "asl", "fut",
+    "bpl", "ora", "fut", "fut", "fut", "ora", "asl", "fut",
+    "clc", "ora", "fut", "fut", "fut", "ora", "asl", "fut",
+    "jsr", "and", "fut", "fut", "bit", "and", "rol", "fut",
+    "plp", "and", "rol", "fut", "bit", "and", "rol", "fut",
+    "bmi", "and", "fut", "fut", "fut", "and", "rol", "fut",
+    "sec", "and", "fut", "fut", "fut", "and", "rol", "fut",
+    "rti", "eor", "fut", "fut", "fut", "eor", "lsr", "fut",
+    "pha", "eor", "lsr", "fut", "jmp", "eor", "lsr", "fut",
+    "bvc", "eor", "fut", "fut", "fut", "eor", "lsr", "fut",
+    "cli", "eor", "fut", "fut", "fut", "eor", "lsr", "fut",
+    "rts", "adc", "fut", "fut", "fut", "adc", "ror", "fut",
+    "pla", "adc", "ror", "fut", "jmp", "adc", "ror", "fut",
+    "bvs", "adc", "fut", "fut", "fut", "adc", "ror", "fut",
+    "sei", "adc", "fut", "fut", "fut", "adc", "ror", "fut",
+    "fut", "sta", "fut", "fut", "sty", "sta", "stx", "fut",
+    "dey", "fut", "txa", "fut", "sty", "sta", "stx", "fut",
+    "bcc", "sta", "fut", "fut", "sty", "sta", "stx", "fut",
+    "tya", "sta", "txs", "fut", "fut", "sta", "fut", "fut",
+    "ldy", "lda", "ldx", "fut", "ldy", "lda", "ldx", "fut",
+    "tay", "lda", "tax", "fut", "ldy", "lda", "ldx", "fut",
+    "bcs", "lda", "fut", "fut", "ldy", "lda", "ldx", "fut",
+    "clv", "lda", "tsx", "fut", "ldy", "lda", "ldx", "fut",
+    "cpy", "cmp", "fut", "fut", "cpy", "cmp", "dec", "fut",
+    "iny", "cmp", "dex", "fut", "cpy", "cmp", "dec", "fut",
+    "bne", "cmp", "fut", "fut", "fut", "cmp", "dec", "fut",
+    "cld", "cmp", "fut", "fut", "fut", "cmp", "dec", "fut",
+    "cpx", "sbc", "fut", "fut", "cpx", "sbc", "inc", "fut",
+    "inx", "sbc", "nop", "fut", "cpx", "sbc", "inc", "fut",
+    "beq", "sbc", "fut", "fut", "fut", "sbc", "inc", "fut",
+    "sed", "sbc", "fut", "fut", "fut", "sbc", "inc", "fut",
+};
+
+uint8_t instructionSizes[256] = {
+    1, 2, 0, 0, 2, 2, 2, 0, 
+    1, 2, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0,
+    1, 3, 1, 0, 3, 3, 3, 0,
+    3, 2, 0, 0, 2, 2, 2, 0,
+    1, 2, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 3, 1, 0, 3, 3, 3, 0,
+    1, 2, 0, 0, 2, 2, 2, 0, 
+    1, 2, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 3, 1, 0, 3, 3, 3, 0,
+    1, 2, 0, 0, 2, 2, 2, 0, 
+    1, 2, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 3, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 0, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 3, 1, 0, 0, 3, 0, 0,
+    2, 2, 2, 0, 2, 2, 2, 0, 
+    1, 2, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 3, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 2, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 3, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 2, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 
+    1, 3, 1, 0, 3, 3, 3, 0
+};
+
+uint8_t instructionModes[256] = {
+    6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
+    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
+    1, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
+    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
+    6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
+    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
+    6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 8, 1, 1, 1,
+    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
+    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
+    10, 9, 6, 9, 12, 12, 13, 13, 6, 3, 6, 3, 2, 2, 3, 3,
+    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
+    10, 9, 6, 9, 12, 12, 13, 13, 6, 3, 6, 3, 2, 2, 3, 3,
+    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
+    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
+    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
+    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2
+};
+
 class cpu
 {
 private:
 	// various registers
-	int16_t PC;
-	int8_t SP, A, X, Y, Status;
+	uint16_t PC;
+	uint8_t SP, A, X, Y, Status;
 	int8_t reg[8];
 	memory *mem;
 
 	// helper variables
 	int32_t insturctions;
 	int32_t clockTicks6502, clockGoal6502;
+
+	OP_CODE_INFO *getOpcodeInfo(int8_t operand, uint16_t address, MODE mode) {
+		OP_CODE_INFO *o = malloc(sizeof(OP_CODE_INFO));
+		o->operand = operand;
+		o->address = address;
+		o->mode = mode;
+		return o;
+	}
 public:
 	int8_t getStatusRegister(CPU *c) {
 		//qwe
@@ -523,93 +621,162 @@ public:
 		this->setZeroFlag(src);
 		this->setAccumulator(src);
 	}
-};
 
-void (*opcodeToFunction[256])(CPU *c, OP_CODE_INFO *o) = {
-    brk, ora, fut, fut, fut, ora, asl, fut,
-    php, ora, asl, fut, fut, ora, asl, fut,
-    bpl, ora, fut, fut, fut, ora, asl, fut,
-    clc, ora, fut, fut, fut, ora, asl, fut,
-    jsr, and, fut, fut, bit, and, rol, fut,
-    plp, and, rol, fut, bit, and, rol, fut,
-    bmi, and, fut, fut, fut, and, rol, fut,
-    sec, and, fut, fut, fut, and, rol, fut,
-    rti, eor, fut, fut, fut, eor, lsr, fut,
-    pha, eor, lsr, fut, jmp, eor, lsr, fut,
-    bvc, eor, fut, fut, fut, eor, lsr, fut,
-    cli, eor, fut, fut, fut, eor, lsr, fut,
-    rts, adc, fut, fut, fut, adc, ror, fut,
-    pla, adc, ror, fut, jmp, adc, ror, fut,
-    bvs, adc, fut, fut, fut, adc, ror, fut,
-    sei, adc, fut, fut, fut, adc, ror, fut,
-    fut, sta, fut, fut, sty, sta, stx, fut,
-    dey, fut, txa, fut, sty, sta, stx, fut,
-    bcc, sta, fut, fut, sty, sta, stx, fut,
-    tya, sta, txs, fut, fut, sta, fut, fut,
-    ldy, lda, ldx, fut, ldy, lda, ldx, fut,
-    tay, lda, tax, fut, ldy, lda, ldx, fut,
-    bcs, lda, fut, fut, ldy, lda, ldx, fut,
-    clv, lda, tsx, fut, ldy, lda, ldx, fut,
-    cpy, cmp, fut, fut, cpy, cmp, dec, fut,
-    iny, cmp, dex, fut, cpy, cmp, dec, fut,
-    bne, cmp, fut, fut, fut, cmp, dec, fut,
-    cld, cmp, fut, fut, fut, cmp, dec, fut,
-    cpx, sbc, fut, fut, cpx, sbc, inc, fut,
-    inx, sbc, nop, fut, cpx, sbc, inc, fut,
-    beq, sbc, fut, fut, fut, sbc, inc, fut,
-    sed, sbc, fut, fut, fut, sbc, inc, fut
-};
+	// This might be the ugliest thing I have ever done :|
+	// FML.
+	void runFunction(OP_CODE_INFO *o, uint8_t opCode) {
+		string functionName = opcodeToFunction[opCode];
+		switch(functionName) {
+			case "adc": this->adc(o); break;
+			case "and": this->and(o); break;
+			case "asl": this->asl(o); break;
+			case "bcc": this->bcc(o); break;
+			case "bcs": this->bcs(o); break;
+			case "beq": this->beq(o); break;
+			case "bit": this->bit(o); break;
+			case "bmi": this->bmi(o); break;
+			case "bne": this->bne(o); break;
+			case "bpl": this->bpl(o); break;
+			case "brk": this->brk(o); break;
+			case "bvc": this->bvc(o); break;
+			case "clc": this->clc(o): break;
+			case "cld": this->cdl(o); break;
+			case "cli": this->cli(o); break;
+			case "cmp": this->cmp(o); break;
+			case "cpx": this->cpx(o); break;
+			case "cpy": this->cpy(o); break;
+			case "dec": this->dec(o); break;
+			case "dex": this->dex(o); break;
+			case "dey": this->dey(o); break;
+			case "fut": this->fut(o); break;
+			case "inc": this->inc(o); break;
+			case "inx": this->inx(o); break;
+			case "iny": this->iny(o); break;
+			case "jmp": this->jmp(o); break;
+			case "jsr": this->jsr(o); break;
+			case "lda": this->lda(o); break;
+			case "ldx": this->ldx(o); break;
+			case "ldy": this->ldy(o); break;
+			case "lsr": this->lsr(o); break;
+			case "nop": this->nop(o); break;
+			case "ora": this->ora(o); break;
+			case "pha": this->pha(o); break;
+			case "php": this->php(o); break;
+			case "pla": this->pla(o); break;
+			case "plp": this->plp(o); break;
+			case "rts": this->rts(o); break;
+			case "sbc": this->sbc(o); break;
+			case "sec": this->sec(o); break;
+			case "sta": this->sta(o); break;
+			case "stx": this->stx(o); break;
+			case "sty": this->sty(o); break;
+			case "tya": this->tya(o); break;
+			case "txa": this->txa(o); break;
+			case "tax": this->tax(o); break;
+			case "eor": this->eor(o); break;
+			case "rti": this->rti(o); break;
+			case "rol": this->rol(o); break;
+			case "ror": this->ror(o); break;
+			case "sei": this->sei(o); break;
+			case "txs": this->txs(o); break;
+			case "sed": this->sed(o); break;
+		}
+	}
 
-uint8_t instructionSizes[256] = {
-    1, 2, 0, 0, 2, 2, 2, 0, 
-    1, 2, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0,
-    1, 3, 1, 0, 3, 3, 3, 0,
-    3, 2, 0, 0, 2, 2, 2, 0,
-    1, 2, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 3, 1, 0, 3, 3, 3, 0,
-    1, 2, 0, 0, 2, 2, 2, 0, 
-    1, 2, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 3, 1, 0, 3, 3, 3, 0,
-    1, 2, 0, 0, 2, 2, 2, 0, 
-    1, 2, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 3, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 0, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 3, 1, 0, 0, 3, 0, 0,
-    2, 2, 2, 0, 2, 2, 2, 0, 
-    1, 2, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 3, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 2, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 3, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 2, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 
-    1, 3, 1, 0, 3, 3, 3, 0
-};
-
-uint8_t instructionModes[256] = {
-    6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    1, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 8, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 13, 13, 6, 3, 6, 3, 2, 2, 3, 3,
-    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 13, 13, 6, 3, 6, 3, 2, 2, 3, 3,
-    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2
+	void run() {
+		uint8_t opCode = this->readMemory(this->PC);
+		OP_CODE_INFO *o;
+		uint8_t mod = instructionModes[opCode];
+		switch(mode) {
+			case modeAccumulator: {
+				operand = this->getAccumulator();
+				o = this->getOpcodeInfo(operand, 0, mode);
+				break;
+			}
+			case modeAbsolute: {
+				uint8_t lowerByte = this->readMemory(this->PC + 1);
+				uint8_t upperByte = this->readMemory(this->PC + 2);
+				uint16_t address = (upperByte << 8) | lowerByte;
+				o = this->getOpcodeInfo(0, address, mode);
+				break;
+			}
+			case modeAbsoluteX: {
+				uint8_t lowerByte = this->readMemory(this->PC + 1);
+				uint8_t upperByte = this->readMemory(this->PC + 2);
+				uint16_t address = (upperByte << 8) | lowerByte;
+				uint16_t xVal = this->getX();
+				o = this->getOpcodeInfo(0, address + xVal, mode);
+				break;
+			}
+			case modeAbsoluteY: {
+				uint8_t lowerByte = this->readMemory(this->PC + 1);
+				uint8_t upperByte = this->readMemory(this->PC + 2);
+				uint16_t address = (upperByte << 8) | lowerByte;
+				uint16_t yVal = this->getY();
+				o = this->getOpcodeInfo(0, address + yVal, mode);
+				break;
+			}
+			case modeImmediate: {
+				uint8_t operand = this->readMemory(this->PC + 1);
+				o = this->getOpcodeInfo(operand, this->PC + 1, mode);
+				break;	
+			}
+			case modeImplied: {
+				o = this->getOpcodeInfo(0, this->PC, mode);
+				break;
+			}
+			case modeIndirect: {
+				uint16_t address = (this->readMemory(this->PC + 2) << 8) | this->readMemory(this->PC + 1);
+				uint16_t finalAddress = (this->readMemory(address + 1) << 8) | this->readMemory(address);
+				o = this->getOpcodeInfo(0, finalAddress, mode);
+				break;
+			}
+			case modeIndexedIndirect: {
+				uint16_t memoryContent = this->readMemory(this->PC + 1);
+				uint16_t xVal = this->getX();
+				uint8_t lowerByte = this->readMemory(memoryContent + xVal);
+				uint8_t upperByte = this->readMemory(memoryContent + xVal + 1);
+				uint8_t operand = this->readMemory((upperByte << 8) | lowerByte);
+				o = this->getOpcodeInfo(operand, (upperByte << 8) | lowerByte, mode);
+				break;
+			}
+			case modeIndirectIndexed: {
+				uint16_t memoryContent = this->readMemory(this->PC + 1);
+				uint8_t lowerByte = this->readMemory(memoryContent);
+				uint8_t upperByte = this->readMemory(memoryContent + 1);
+				uint16_t yVal = this->getY();
+				uint16_t finalAddress = ((upperByte << 8) | lowerByte) + yVal;
+				uint8_t operand = this->readMemory(finalAddress);
+				o = this->getOpcodeInfo(operand, finalAddress, mode);
+				break;
+			}
+			case modeRelative: {
+				int16_t offset = this->readMemory(this->PC + 1);
+				uint16_t address = this->PC + 2 + offset;
+				o = this->getOpcodeInfo(0, address, mode);
+				break;
+			}
+			case modeZeroPage: {
+				uint16_t address = 0x00FF & this->readMemory(this->PC + 1);
+				uint8_t operand = this->readMemory(address);
+				o = this->getOpcodeInfo(operand, address, mode);
+			}
+			case modeZeroPageX: {
+				uint16_t address = 0x00FF & this->readMemory(this->PC + 1);
+				uint16_t finalAddress = address + (0x00FF & this->getX());
+				uint8_t operand = this->readMemory(finalAddress);
+				o = this->getOpcodeInfo(operand, finalAddress, mode);
+				break;
+			}
+			case modeZeroPageY: {
+				uint16_t address = 0x00FF & this->readMemory(this->PC + 1);
+				uint16_t finalAddress = address + (0x00FF & this->getY());
+				uint8_t operand = this->readMemory(finalAddress);
+				o = this->getOpcodeInfo(operand, finalAddress, mode);
+				break;
+			}
+		}
+		this->PC += instructionSizes[opCode];
+		this->runFunction(o, opCode);
+	}
 };
