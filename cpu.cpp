@@ -2,6 +2,7 @@
 #include "string.h"
 // just get everything here
 #include <bits/stdc++.h>
+#include "console.cpp"
 
 typedef enum mode {
 	UNUSED,
@@ -137,7 +138,7 @@ const static uint8_t instructionModes[256] = {
 /* F */     rel, indy,  imp, indy,  zpx,  zpx,  zpx,  zpx,  imp, absy,  imp, absy, absx, absx, absx, absx  /* F */
 };
 
-class cpu
+class CPU
 {
 private:
 	// various registers
@@ -145,6 +146,7 @@ private:
 	uint8_t SP, A, X, Y, Status;
 	int8_t reg[8];
 	memory *mem;
+	console *nes;
 
 	// helper variables
 	int32_t insturctions;
@@ -160,29 +162,33 @@ private:
 
 	uint8_t pullFromStack() {
 		this->SP++;
-		return this->memory->readMemory((BASE_STACK_START | this->SP));
+		return this->console->cpuReadMemory((BASE_STACK_START | this->SP));
 	}
 
 	void pushToStack(uint8_t val) {
-		this->memory((BASE_STACK_START | this->SP));
+		this->console->cpuWriteMemory((BASE_STACK_START | this->SP), val);
 		this->SP++;
 		return ;
 	}
 
 	void writeToMemory(uint16_t address, int8_t val) {
-		this->memory->write(address, val);
+		this->console->cpuWriteMemory(address, val);
 		return ;
 	}
 
 	uint8_t readMemory(uint16_t address) {
-		return this->memory->read(address);
+		return this->console->cpuReadMemory(address);
 	}
 public:
-	cpu() {
-		this->mem = new memory();
+	CPU(console *_nes) {
 		this->PC = this->SP = this->A = this->X = this->Y = this->Status = 0;
 		// default value always
 		this->reg[reg_interrupt] = 1;
+		this->nes = _nes;
+	}
+
+	void setMemory(Memory *mem) {
+		this->memory = mem;
 	}
 
 	int8_t getStatusRegister() {
