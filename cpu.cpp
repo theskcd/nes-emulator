@@ -1,21 +1,23 @@
 // #include "memory.cpp"
 #include "string.h"
+// just get everything here
+#include <bits/stdc++.h>
 
 typedef enum mode {
 	UNUSED,
-	implicit,
-	accumulator,
-	immediate,
-	zeroPage,
-	zeroPageX,
-	zeroPageY,
-	relative,
-	absolute,
-	absoluteX,
-	absoluteY,
-	indirect,
-	indexedIndirect,
-	indirectIndexed,
+	imp,
+	acc,
+	imm,
+	zp,
+	zpx,
+	zpy,
+	rel,
+	abso,
+	absx,
+	absy,
+	ind,
+	indx,
+	indy,
 } MODE;
 
 typedef enum Regs {
@@ -32,28 +34,28 @@ typedef enum Regs {
 typedef struct op_code_info {
 	int8_t operand;
 	uint16_t address;
-	MODE mode;
+	uint8_t mode;
 } OP_CODE_INFO;
 
-#define FLAG_CARRY 0x01
-#define FLAG_ZERO 0x02
-#define FLAG_INTERRUPT 0x04
-#define FLAG_DECIMAL 0x08
-#define FLAG_BREAK 0x10
-#define FLAG_CONSTANT 0x20
-#define FLAG_OVERFLOW 0x40
-#define FLAG_SIGN 0x80
+#define FLAG_CARRY 0
+#define FLAG_ZERO 1
+#define FLAG_INTERRUPT 2
+#define FLAG_DECIMAL 3
+#define FLAG_BREAK 4
+#define FLAG_CONSTANT 5
+#define FLAG_OVERFLOW 6
+#define FLAG_SIGN 7
 #define BASE_STACK_START 0x100
 
-string opcodeToFunction[256] = {
+const static std::string opcodeToFunction[256] = {
     "brk", "ora", "fut", "fut", "fut", "ora", "asl", "fut",
     "php", "ora", "asl", "fut", "fut", "ora", "asl", "fut",
     "bpl", "ora", "fut", "fut", "fut", "ora", "asl", "fut",
     "clc", "ora", "fut", "fut", "fut", "ora", "asl", "fut",
-    "jsr", "and", "fut", "fut", "bit", "and", "rol", "fut",
-    "plp", "and", "rol", "fut", "bit", "and", "rol", "fut",
-    "bmi", "and", "fut", "fut", "fut", "and", "rol", "fut",
-    "sec", "and", "fut", "fut", "fut", "and", "rol", "fut",
+    "jsr", "_and", "fut", "fut", "bit", "_and", "rol", "fut",
+    "plp", "_and", "rol", "fut", "bit", "_and", "rol", "fut",
+    "bmi", "_and", "fut", "fut", "fut", "_and", "rol", "fut",
+    "sec", "_and", "fut", "fut", "fut", "_and", "rol", "fut",
     "rti", "eor", "fut", "fut", "fut", "eor", "lsr", "fut",
     "pha", "eor", "lsr", "fut", "jmp", "eor", "lsr", "fut",
     "bvc", "eor", "fut", "fut", "fut", "eor", "lsr", "fut",
@@ -80,7 +82,7 @@ string opcodeToFunction[256] = {
     "sed", "sbc", "fut", "fut", "fut", "sbc", "inc", "fut",
 };
 
-uint8_t instructionSizes[256] = {
+const static uint8_t instructionSizes[256] = {
     1, 2, 0, 0, 2, 2, 2, 0, 
     1, 2, 1, 0, 3, 3, 3, 0,
     2, 2, 0, 0, 2, 2, 2, 0,
@@ -115,23 +117,24 @@ uint8_t instructionSizes[256] = {
     1, 3, 1, 0, 3, 3, 3, 0
 };
 
-uint8_t instructionModes[256] = {
-    6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    1, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 8, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 13, 13, 6, 3, 6, 3, 2, 2, 3, 3,
-    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 13, 13, 6, 3, 6, 3, 2, 2, 3, 3,
-    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2,
-    5, 7, 5, 7, 11, 11, 11, 11, 6, 5, 6, 5, 1, 1, 1, 1,
-    10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2, 2, 2, 2
+const static uint8_t instructionModes[256] = {
+/*        |  0  |  1  |  2  |  3  |  4  |  5  |  6  |  7  |  8  |  9  |  A  |  B  |  C  |  D  |  E  |  F  |     */
+/* 0 */     imp, indx,  imp, indx,   zp,   zp,   zp,   zp,  imp,  imm,  acc,  imm, abso, abso, abso, abso, /* 0 */
+/* 1 */     rel, indy,  imp, indy,  zpx,  zpx,  zpx,  zpx,  imp, absy,  imp, absy, absx, absx, absx, absx, /* 1 */
+/* 2 */    abso, indx,  imp, indx,   zp,   zp,   zp,   zp,  imp,  imm,  acc,  imm, abso, abso, abso, abso, /* 2 */
+/* 3 */     rel, indy,  imp, indy,  zpx,  zpx,  zpx,  zpx,  imp, absy,  imp, absy, absx, absx, absx, absx, /* 3 */
+/* 4 */     imp, indx,  imp, indx,   zp,   zp,   zp,   zp,  imp,  imm,  acc,  imm, abso, abso, abso, abso, /* 4 */
+/* 5 */     rel, indy,  imp, indy,  zpx,  zpx,  zpx,  zpx,  imp, absy,  imp, absy, absx, absx, absx, absx, /* 5 */
+/* 6 */     imp, indx,  imp, indx,   zp,   zp,   zp,   zp,  imp,  imm,  acc,  imm,  ind, abso, abso, abso, /* 6 */
+/* 7 */     rel, indy,  imp, indy,  zpx,  zpx,  zpx,  zpx,  imp, absy,  imp, absy, absx, absx, absx, absx, /* 7 */
+/* 8 */     imm, indx,  imm, indx,   zp,   zp,   zp,   zp,  imp,  imm,  imp,  imm, abso, abso, abso, abso, /* 8 */
+/* 9 */     rel, indy,  imp, indy,  zpx,  zpx,  zpy,  zpy,  imp, absy,  imp, absy, absx, absx, absy, absy, /* 9 */
+/* A */     imm, indx,  imm, indx,   zp,   zp,   zp,   zp,  imp,  imm,  imp,  imm, abso, abso, abso, abso, /* A */
+/* B */     rel, indy,  imp, indy,  zpx,  zpx,  zpy,  zpy,  imp, absy,  imp, absy, absx, absx, absy, absy, /* B */
+/* C */     imm, indx,  imm, indx,   zp,   zp,   zp,   zp,  imp,  imm,  imp,  imm, abso, abso, abso, abso, /* C */
+/* D */     rel, indy,  imp, indy,  zpx,  zpx,  zpx,  zpx,  imp, absy,  imp, absy, absx, absx, absx, absx, /* D */
+/* E */     imm, indx,  imm, indx,   zp,   zp,   zp,   zp,  imp,  imm,  imp,  imm, abso, abso, abso, abso, /* E */
+/* F */     rel, indy,  imp, indy,  zpx,  zpx,  zpx,  zpx,  imp, absy,  imp, absy, absx, absx, absx, absx  /* F */
 };
 
 class cpu
@@ -147,22 +150,39 @@ private:
 	int32_t insturctions;
 	int32_t clockTicks6502, clockGoal6502;
 
-	OP_CODE_INFO *getOpcodeInfo(int8_t operand, uint16_t address, MODE mode) {
-		OP_CODE_INFO *o = malloc(sizeof(OP_CODE_INFO));
+	OP_CODE_INFO *getOpcodeInfo(int8_t operand, uint16_t address, uint8_t mode) {
+		OP_CODE_INFO *o = (OP_CODE_INFO*)malloc(sizeof(OP_CODE_INFO));
 		o->operand = operand;
 		o->address = address;
 		o->mode = mode;
 		return o;
 	}
-public:
-	int8_t getStatusRegister(CPU *c) {
-		//qwe
+
+	uint8_t pullFromStack() {
+		this->SP++;
+		return this->memory->readMemory((BASE_STACK_START | this->SP));
 	}
+
+	void pushToStack(uint8_t val) {
+		this->memory((BASE_STACK_START | this->SP));
+		this->SP++;
+		return ;
+	}
+
+	void writeToMemory(uint16_t address, int8_t val) {
+		this->memory->write(address, val);
+		return ;
+	}
+
+	uint8_t readMemory(uint16_t address) {
+		return this->memory->read(address);
+	}
+public:
 	cpu() {
 		this->mem = new memory();
 		this->PC = this->SP = this->A = this->X = this->Y = this->Status = 0;
 		// default value always
-		this->reg[reg_constant] = 1;
+		this->reg[reg_interrupt] = 1;
 	}
 
 	int8_t getStatusRegister() {
@@ -179,26 +199,36 @@ public:
 		return statusRegister;	
 	}
 
+	void setStatusRegister(uint8_t statusRegister) {
+		(statusRegister & FLAG_CARRY) ? this->reg[reg_carry] = 1 : this->reg[reg_carry] = 0;
+		(statusRegister & FLAG_ZERO) ? this->reg[reg_zero] = 1 : this->reg[reg_zero] = 0;
+		(statusRegister & FLAG_INTERRUPT) ? this->reg[reg_interrupt] = 1 : this->reg[reg_interrupt] = 0;
+		(statusRegister & FLAG_DECIMAL) ? this->reg[reg_decimal] = 1 : this->reg[reg_decimal] = 0;
+		(statusRegister & FLAG_BREAK) ? this->reg[reg_break] = 1 : this->reg[reg_break] = 0;
+		(statusRegister & FLAG_CONSTANT) ? this->reg[reg_constant] = 1 : this->reg[reg_constant] = 0;
+		(statusRegister & FLAG_OVERFLOW) ? this->reg[reg_overflow] = 1 : this->reg[reg_overflow] = 0;
+		(statusRegister & FLAG_SIGN) ? this->reg[reg_sign] = 1 : this->reg[reg_sign] = 0;
+	}
+
 	int8_t getCarryFlag() { return this->reg[reg_carry]; }
 	int8_t getZeroFlag() { return this->reg[reg_zero]; }
 	int8_t getInterruptFlag() { return this->reg[reg_interrupt]; }
 	int8_t getDecimalFlag() { return this->reg[reg_decimal]; }
 	int8_t getBreakFlag() { return this->reg[reg_break]; }
-	int8_t getConstantFlag() { return this->reg[reg_fifth]; }
 	int8_t getOverflowFlag() { return this->reg[reg_overflow]; }
 	int8_t getSignFlag() { return this->reg[reg_sign]; }
-	int8_t getAccumulator() { return this->A; }
-	int8_t getX() { return this->X; }
-	int8_t getY() { return this->Y; }
+	uint8_t getAccumulator() { return this->A; }
+	uint8_t getX() { return this->X; }
+	uint8_t getY() { return this->Y; }
 
 
-	void setZeroFlag(int8_t val) {
+	void setZeroFlag(uint8_t val) {
 		if (val == 0) this->reg[reg_zero] = 1;
 		else this->reg[reg_zero] = 0;
 	}
 
 	void setCarryFlag(int16_t val) {
-		(val > 0xFF) ? this->reg[reg_carry] = 1, this->reg[reg_carry] = 0;
+		(val > 0xFF) ? this->reg[reg_carry] = 1 : this->reg[reg_carry] = 0;
 	}
 
 	void setSignFlag(int8_t val) {
@@ -223,19 +253,19 @@ public:
 	}
 
 	void setOverflowFlag(int8_t val) {
-		(val > 0) ? this->reg[reg_overflow] = 1, this->reg[reg_overflow] = 0;
+		(val > 0) ? this->reg[reg_overflow] = 1 : this->reg[reg_overflow] = 0;
 	}
 
 	void setBreakFlag(int8_t val) {
-		(val > 0) ? this->reg[reg_break] = 1, this->reg[reg_break] = 0;
+		(val > 0) ? this->reg[reg_break] = 1 : this->reg[reg_break] = 0;
 	}
 
 	void setInterruptFlag(int8_t val) {
-		(val > 0) ? this->reg[reg_interrupt] = 1, this->reg[reg_interrupt] = 0;
+		(val > 0) ? this->reg[reg_interrupt] =  1 : this->reg[reg_interrupt] = 0;
 	}
 
 	void setDecimalFlag(int8_t val) {
-		(val > 0) ? this->reg[reg_decimal] = 1, this->reg[reg_decimal] = 0;
+		(val > 0) ? this->reg[reg_decimal] = 1 : this->reg[reg_decimal] = 0;
 	}
 
 	void setAccumulator(int8_t val) {
@@ -255,22 +285,22 @@ public:
 	// reference : http://nesdev.com/6502.txt
 	void adc(OP_CODE_INFO *o) {
 		int8_t carry = this->getCarryFlag();
-		int8_t accumulator = this->getAccumulator();
-		int8_t operand = o->operand;
+		uint8_t accumulator = this->getAccumulator();
+		uint8_t operand = o->operand;
 		int16_t sum = (0x00FF & carry) + (0x00FF & accumulator) + (0x00FF & operand);
-		int8_t sumInByte = (0xFF & sum);
+		uint8_t sumInByte = (0xFF & sum);
 		this->setZeroFlag(sumInByte);
 		this->setCarryFlag(sum);
 		this->setOverflowFlagADC(accumulator, sumInByte, o->operand);
-		this->setNegativeFlag(sumInByte);
+		this->setSignFlag(sumInByte);
 		this->setAccumulator(sumInByte);
 	}
 
-	void and(OP_CODE_INFO *o) {
+	void _and(OP_CODE_INFO *o) {
 		int8_t accumulator = this->getAccumulator();
 		int8_t operand = o->operand;
 		int8_t res = accumulator & operand;
-		this->setNegativeFlag(res);
+		this->setSignFlag(res);
 		this->setZeroFlag(res);
 		this->setAccumulator(res);
 	}
@@ -280,12 +310,12 @@ public:
 		int8_t resInByte = res & 0xFF;
 		this->setCarryFlag(res);
 		this->setZeroFlag(resInByte);
-		this->setNegativeFlag(resInByte);
-		if (o->mode == accumulator) {
+		this->setSignFlag(resInByte);
+		if (o->mode == acc) {
 			this->setAccumulator(resInByte);
 		} else {
 			// TODO : implement the function
-			this->writeToMemory(resInByte, o->address);
+			this->writeToMemory(o->address, resInByte);
 		}
 	}
 
@@ -311,7 +341,7 @@ public:
 	void bit(OP_CODE_INFO *o) {
 		this->setSignFlag(o->operand);
 		this->setOverflowFlag((o->operand & 0x40) ? 1 : 0);
-		this->setZeroFlag(o->operand & this->getAccumulator());
+		this->setZeroFlag((o->operand & this->getAccumulator()));
 	}
 
 	void bmi(OP_CODE_INFO *o) {
@@ -351,7 +381,7 @@ public:
 	}
 
 	void bvs(OP_CODE_INFO *o) {
-		if (!this->getOverflowFlag()) {
+		if (this->getOverflowFlag()) {
 			this->PC = o->address;
 		}
 	}
@@ -363,7 +393,7 @@ public:
 
 	void cmp(OP_CODE_INFO *o) {
 		int8_t src = this->getAccumulator() - o->operand;
-		int16_t longSrc = (int16_t)this->getAccumulator() - (int16_t)o->operand;
+		int16_t longSrc = (0x00FF & this->getAccumulator()) - (0x00FF & o->operand);
 		this->setCarryFlag(longSrc < 0x100);
 		this->setSignFlag(src);
 		this->setZeroFlag(src);
@@ -416,8 +446,6 @@ public:
 		this->setAccumulator(src);
 	}
 
-	// check if uint8_t is the correct datatype to use.
-	// it probably is because of the overflow which might occur
 	void inc(OP_CODE_INFO *o) {
 		uint8_t src = o->operand;
 		src = src + 1;
@@ -443,13 +471,14 @@ public:
 	}
 
 	void jmp(OP_CODE_INFO *o) {
-		this->PC = o->address;
+		// convert to uint16_t
+		this->PC = (0x00FF & o->address);
 	}
 
 	void jsr(OP_CODE_INFO *o) {
 		this->PC--;
-		int8_t returnAddressHighBits = ((this->PC >> 8) & 0xFF);
-		int8_t returnAddressLowerBits = (this->PC & 0xFF);
+		uint8_t returnAddressHighBits = ((this->PC >> 8) & 0xFF);
+		uint8_t returnAddressLowerBits = (this->PC & 0xFF);
 		this->pushToStack(returnAddressHighBits);
 		this->pushToStack(returnAddressLowerBits);
 		this->PC = o->address;
@@ -469,7 +498,7 @@ public:
 
 	void ldy(OP_CODE_INFO *o) {
 		this->setSignFlag(o->operand);
-		this->setZeroFlag(o->operand):
+		this->setZeroFlag(o->operand);
 		this->setY(o->operand);
 	}
 
@@ -479,7 +508,7 @@ public:
 		src >>= 1;
 		this->setSignFlag(src);
 		this->setZeroFlag(src);
-		if (o->mode == accumulator) {
+		if (o->mode == acc) {
 			this->setAccumulator(src);
 		} else {
 			this->writeToMemory(o->address, src);
@@ -509,26 +538,27 @@ public:
 	// TODO : implement pullFromStack function
 	void pla(OP_CODE_INFO *o) {
 		int8_t src = this->pullFromStack();
+		this->setAccumulator(src);
 		this->setSignFlag(src);
 		this->setZeroFlag(src);
 	}
 
 	// TODO : implement setStatusRegister function
 	void plp(OP_CODE_INFO *o) {
-		int8_t src = this->pullFromStack();
+		uint8_t src = this->pullFromStack();
 		this->setStatusRegister(src);
 	}
 
 	void rol(OP_CODE_INFO *o) {
-		int16_t longSrc = o->operand;
+		uint16_t longSrc = o->operand;
 		longSrc <<= 1;
 		if (this->getCarryFlag()) {
 			longSrc |= 0x1;
 		}
-		int8_t src = longSrc & 0xFF;
+		uint8_t src = longSrc & 0xFF;
 		this->setSignFlag(src);
 		this->setZeroFlag(src);
-		if (o->mode == accumulator) {
+		if (o->mode == acc) {
 			this->setAccumulator(src);
 		} else {
 			this->writeToMemory(o->address, src);
@@ -536,14 +566,14 @@ public:
 	}
 
 	void ror(OP_CODE_INFO *o) {
-		int16_t longSrc = o->operand;
+		uint16_t longSrc = o->operand;
 		if (this->getCarryFlag()) longSrc |= 0x100;
+		uint8_t src = longSrc & 0xFF;
 		this->setCarryFlag((src & 0x01) > 0 ? 1 : 0);
 		longSrc >>= 1;
-		int8_t src = longSrc & 0xFF;
 		this->setSignFlag(src);
 		this->setZeroFlag(src);
-		if (o->mode == accumulator) {
+		if (o->mode == acc) {
 			this->setAccumulator(src);
 		} else {
 			this->writeToMemory(o->address, src);
@@ -551,7 +581,7 @@ public:
 	}
 
 	void rti(OP_CODE_INFO *o) {
-		int8_t src = this->pullFromStack();
+		uint8_t src = this->pullFromStack();
 		this->setStatusRegister(src);
 		uint8_t lowerBits = this->pullFromStack();
 		uint8_t upperBits = this->pullFromStack();
@@ -560,8 +590,10 @@ public:
 	}
 
 	void rts(OP_CODE_INFO *o) {
-		uint16_t src = 0x00FF & this->pullFromStack();
-		src += (this->pullFromStack() << 8) + 1;
+		uint8_t lowerByte = this->pullFromStack();
+		uint8_t upperByte = this->pullFromStack();
+		uint16_t src = ((upperByte << 8) | lowerByte);
+		src += 1;
 		this->PC = src;
 	}
 
@@ -622,85 +654,89 @@ public:
 		this->setAccumulator(src);
 	}
 
+	void fut(OP_CODE_INFO *o) {
+		// do nothing :|
+		// these opcodes arent required for NES.
+	}
+
 	// This might be the ugliest thing I have ever done :|
 	// FML.
 	void runFunction(OP_CODE_INFO *o, uint8_t opCode) {
-		string functionName = opcodeToFunction[opCode];
-		switch(functionName) {
-			case "adc": this->adc(o); break;
-			case "and": this->and(o); break;
-			case "asl": this->asl(o); break;
-			case "bcc": this->bcc(o); break;
-			case "bcs": this->bcs(o); break;
-			case "beq": this->beq(o); break;
-			case "bit": this->bit(o); break;
-			case "bmi": this->bmi(o); break;
-			case "bne": this->bne(o); break;
-			case "bpl": this->bpl(o); break;
-			case "brk": this->brk(o); break;
-			case "bvc": this->bvc(o); break;
-			case "clc": this->clc(o): break;
-			case "cld": this->cdl(o); break;
-			case "cli": this->cli(o); break;
-			case "cmp": this->cmp(o); break;
-			case "cpx": this->cpx(o); break;
-			case "cpy": this->cpy(o); break;
-			case "dec": this->dec(o); break;
-			case "dex": this->dex(o); break;
-			case "dey": this->dey(o); break;
-			case "fut": this->fut(o); break;
-			case "inc": this->inc(o); break;
-			case "inx": this->inx(o); break;
-			case "iny": this->iny(o); break;
-			case "jmp": this->jmp(o); break;
-			case "jsr": this->jsr(o); break;
-			case "lda": this->lda(o); break;
-			case "ldx": this->ldx(o); break;
-			case "ldy": this->ldy(o); break;
-			case "lsr": this->lsr(o); break;
-			case "nop": this->nop(o); break;
-			case "ora": this->ora(o); break;
-			case "pha": this->pha(o); break;
-			case "php": this->php(o); break;
-			case "pla": this->pla(o); break;
-			case "plp": this->plp(o); break;
-			case "rts": this->rts(o); break;
-			case "sbc": this->sbc(o); break;
-			case "sec": this->sec(o); break;
-			case "sta": this->sta(o); break;
-			case "stx": this->stx(o); break;
-			case "sty": this->sty(o); break;
-			case "tya": this->tya(o); break;
-			case "txa": this->txa(o); break;
-			case "tax": this->tax(o); break;
-			case "eor": this->eor(o); break;
-			case "rti": this->rti(o); break;
-			case "rol": this->rol(o); break;
-			case "ror": this->ror(o); break;
-			case "sei": this->sei(o); break;
-			case "txs": this->txs(o); break;
-			case "sed": this->sed(o); break;
-		}
+		std::string functionName = opcodeToFunction[opCode];
+		// >BULLSHIT.exe
+		if (functionName ==  "adc") {this->adc(o); return;}
+		if (functionName ==  "and") {this->_and(o); return;}
+		if (functionName ==  "asl") {this->asl(o); return;}
+		if (functionName ==  "bcc") {this->bcc(o); return;}
+		if (functionName ==  "bcs") {this->bcs(o); return;}
+		if (functionName ==  "beq") {this->beq(o); return;}
+		if (functionName ==  "bit") {this->bit(o); return;}
+		if (functionName ==  "bmi") {this->bmi(o); return;}
+		if (functionName ==  "bne") {this->bne(o); return;}
+		if (functionName ==  "bpl") {this->bpl(o); return;}
+		if (functionName ==  "brk") {this->brk(o); return;}
+		if (functionName ==  "bvc") {this->bvc(o); return;}
+		if (functionName ==  "clc") {this->clc(o); return;}
+		if (functionName ==  "cld") {this->cld(o); return;}
+		if (functionName ==  "cli") {this->cli(o); return;}
+		if (functionName ==  "cmp") {this->cmp(o); return;}
+		if (functionName ==  "cpx") {this->cpx(o); return;}
+		if (functionName ==  "cpy") {this->cpy(o); return;}
+		if (functionName ==  "dec") {this->dec(o); return;}
+		if (functionName ==  "dex") {this->dex(o); return;}
+		if (functionName ==  "dey") {this->dey(o); return;}
+		if (functionName ==  "fut") {this->fut(o); return;}
+		if (functionName ==  "inc") {this->inc(o); return;}
+		if (functionName ==  "inx") {this->inx(o); return;}
+		if (functionName ==  "iny") {this->iny(o); return;}
+		if (functionName ==  "jmp") {this->jmp(o); return;}
+		if (functionName ==  "jsr") {this->jsr(o); return;}
+		if (functionName ==  "lda") {this->lda(o); return;}
+		if (functionName ==  "ldx") {this->ldx(o); return;}
+		if (functionName ==  "ldy") {this->ldy(o); return;}
+		if (functionName ==  "lsr") {this->lsr(o); return;}
+		if (functionName ==  "nop") {this->nop(o); return;}
+		if (functionName ==  "ora") {this->ora(o); return;}
+		if (functionName ==  "pha") {this->pha(o); return;}
+		if (functionName ==  "php") {this->php(o); return;}
+		if (functionName ==  "pla") {this->pla(o); return;}
+		if (functionName ==  "plp") {this->plp(o); return;}
+		if (functionName ==  "rts") {this->rts(o); return;}
+		if (functionName ==  "sbc") {this->sbc(o); return;}
+		if (functionName ==  "sec") {this->sec(o); return;}
+		if (functionName ==  "sta") {this->sta(o); return;}
+		if (functionName ==  "stx") {this->stx(o); return;}
+		if (functionName ==  "sty") {this->sty(o); return;}
+		if (functionName ==  "tya") {this->tya(o); return;}
+		if (functionName ==  "txa") {this->txa(o); return;}
+		if (functionName ==  "tax") {this->tax(o); return;}
+		if (functionName ==  "eor") {this->eor(o); return;}
+		if (functionName ==  "rti") {this->rti(o); return;}
+		if (functionName ==  "rol") {this->rol(o); return;}
+		if (functionName ==  "ror") {this->ror(o); return;}
+		if (functionName ==  "sei") {this->sei(o); return;}
+		if (functionName ==  "txs") {this->txs(o); return;}
+		if (functionName ==  "sed") {this->sed(o); return;}
 	}
 
 	void run() {
 		uint8_t opCode = this->readMemory(this->PC);
 		OP_CODE_INFO *o;
-		uint8_t mod = instructionModes[opCode];
+		uint8_t mode = instructionModes[opCode];
 		switch(mode) {
-			case modeAccumulator: {
-				operand = this->getAccumulator();
+			case acc: {
+				uint8_t operand = this->getAccumulator();
 				o = this->getOpcodeInfo(operand, 0, mode);
 				break;
 			}
-			case modeAbsolute: {
+			case abso: {
 				uint8_t lowerByte = this->readMemory(this->PC + 1);
 				uint8_t upperByte = this->readMemory(this->PC + 2);
 				uint16_t address = (upperByte << 8) | lowerByte;
 				o = this->getOpcodeInfo(0, address, mode);
 				break;
 			}
-			case modeAbsoluteX: {
+			case absx: {
 				uint8_t lowerByte = this->readMemory(this->PC + 1);
 				uint8_t upperByte = this->readMemory(this->PC + 2);
 				uint16_t address = (upperByte << 8) | lowerByte;
@@ -708,7 +744,7 @@ public:
 				o = this->getOpcodeInfo(0, address + xVal, mode);
 				break;
 			}
-			case modeAbsoluteY: {
+			case absy: {
 				uint8_t lowerByte = this->readMemory(this->PC + 1);
 				uint8_t upperByte = this->readMemory(this->PC + 2);
 				uint16_t address = (upperByte << 8) | lowerByte;
@@ -716,22 +752,22 @@ public:
 				o = this->getOpcodeInfo(0, address + yVal, mode);
 				break;
 			}
-			case modeImmediate: {
+			case imm: {
 				uint8_t operand = this->readMemory(this->PC + 1);
 				o = this->getOpcodeInfo(operand, this->PC + 1, mode);
 				break;	
 			}
-			case modeImplied: {
+			case imp: {
 				o = this->getOpcodeInfo(0, this->PC, mode);
 				break;
 			}
-			case modeIndirect: {
+			case ind: {
 				uint16_t address = (this->readMemory(this->PC + 2) << 8) | this->readMemory(this->PC + 1);
 				uint16_t finalAddress = (this->readMemory(address + 1) << 8) | this->readMemory(address);
 				o = this->getOpcodeInfo(0, finalAddress, mode);
 				break;
 			}
-			case modeIndexedIndirect: {
+			case indx: {
 				uint16_t memoryContent = this->readMemory(this->PC + 1);
 				uint16_t xVal = this->getX();
 				uint8_t lowerByte = this->readMemory(memoryContent + xVal);
@@ -740,7 +776,7 @@ public:
 				o = this->getOpcodeInfo(operand, (upperByte << 8) | lowerByte, mode);
 				break;
 			}
-			case modeIndirectIndexed: {
+			case indy: {
 				uint16_t memoryContent = this->readMemory(this->PC + 1);
 				uint8_t lowerByte = this->readMemory(memoryContent);
 				uint8_t upperByte = this->readMemory(memoryContent + 1);
@@ -750,25 +786,25 @@ public:
 				o = this->getOpcodeInfo(operand, finalAddress, mode);
 				break;
 			}
-			case modeRelative: {
+			case rel: {
 				int16_t offset = this->readMemory(this->PC + 1);
 				uint16_t address = this->PC + 2 + offset;
 				o = this->getOpcodeInfo(0, address, mode);
 				break;
 			}
-			case modeZeroPage: {
+			case zp: {
 				uint16_t address = 0x00FF & this->readMemory(this->PC + 1);
 				uint8_t operand = this->readMemory(address);
 				o = this->getOpcodeInfo(operand, address, mode);
 			}
-			case modeZeroPageX: {
+			case zpx: {
 				uint16_t address = 0x00FF & this->readMemory(this->PC + 1);
 				uint16_t finalAddress = address + (0x00FF & this->getX());
 				uint8_t operand = this->readMemory(finalAddress);
 				o = this->getOpcodeInfo(operand, finalAddress, mode);
 				break;
 			}
-			case modeZeroPageY: {
+			case zpy: {
 				uint16_t address = 0x00FF & this->readMemory(this->PC + 1);
 				uint16_t finalAddress = address + (0x00FF & this->getY());
 				uint8_t operand = this->readMemory(finalAddress);
